@@ -1,7 +1,6 @@
-// utils/api.ts
-
 import { APIResponse } from "@/app/types";
 
+// This function fetches stock data from the API based on the given time range. And returns a promise that resolves to the API response type.
 export const fetchStockData = async (
     timerange: "1d" | "1w" | "1m" | "1y"
 ): Promise<APIResponse> => {
@@ -14,13 +13,13 @@ export const fetchStockData = async (
         );
     }
 
-    const url = new URL(API_URL); 
-    url.searchParams.append("timerange", timerange); 
+    const url = new URL(API_URL);
+    url.searchParams.append("timerange", timerange);
 
     const response = await fetch(url.toString(), {
         method: "GET",
         headers: {
-            Authorization: `Bearer ${API_KEY}`,
+            Auth: `Bearer ${API_KEY}`,
             "Content-Type": "application/json",
         },
     });
@@ -30,6 +29,6 @@ export const fetchStockData = async (
         throw new Error(errorData.message || "Failed to fetch stock data.");
     }
 
-    const data: APIResponse = await response.json();
+    const data: APIResponse = await response.json(); // convert JSON string to APIresponse type
     return data;
 };
