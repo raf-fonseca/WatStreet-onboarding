@@ -3,55 +3,48 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
 import { ChevronDown } from "lucide-react";
 import { Button } from "./ui/button";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 const TimeRange = () => {
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
+    const router = useRouter();
+
+    const handleSelect = (time: "1d" | "1w" | "1m" | "1y") => {
+        setSelectedTime(time);
+        router.push(`/?timerange=${time}`);
+    };
     return (
-        <div>
-            <div className="flex items-center justify-center py-16">
-                <div className="flex px-1 py-1 rounded-xl border-[1px] border-color-white ">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="">
-                                <div className="text-md font-semibold">
-                                    {selectedTime || "Time"}
-                                </div>
-                                <ChevronDown />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                            <DropdownMenuItem
-                                onClick={() => setSelectedTime("1D")}
-                            >
-                                1D
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onClick={() => setSelectedTime("1W")}
-                            >
-                                1W
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onClick={() => setSelectedTime("1M")}
-                            >
-                                1M
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onClick={() => setSelectedTime("1Y")}
-                            >
-                                1Y
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-            </div>
+        <div className="flex px-1 py-1 rounded-xl border-[1px] border-color-white ">
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="">
+                        <div className="text-md font-semibold">
+                            {selectedTime?.toUpperCase() || "1D"}
+                        </div>
+                        <ChevronDown />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => handleSelect("1d")}>
+                        1D
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleSelect("1w")}>
+                        1W
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleSelect("1m")}>
+                        1M
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleSelect("1y")}>
+                        1Y
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
     );
 };

@@ -4,7 +4,6 @@ import "./globals.css";
 
 import { Open_Sans } from "next/font/google";
 
-//👇 Configure our font object
 const openSans = Open_Sans({
     subsets: ["latin"],
     display: "swap",
