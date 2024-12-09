@@ -17,7 +17,7 @@ const Home = async ({ searchParams }: HomeProps) => {
             <div className="">
                 <TimeRange />
             </div>
-            <div className="font-bold ">{stockData.metrics.currentPrice}</div>
+            <div className="font-bold "></div>
         </div>
     );
 };

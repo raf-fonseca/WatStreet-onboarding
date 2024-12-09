@@ -1,12 +1,5 @@
 "use client";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
-import { ChevronDown } from "lucide-react";
 import { Button } from "./ui/button";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -19,32 +12,26 @@ const TimeRange = () => {
         setSelectedTime(time);
         router.push(`/?timerange=${time}`);
     };
+    const times = ["1d", "1w", "1m", "1y"];
+
     return (
-        <div className="flex px-1 py-1 rounded-xl border-[1px] border-color-white ">
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="">
-                        <div className="text-md font-semibold">
-                            {selectedTime?.toUpperCase() || "1D"}
-                        </div>
-                        <ChevronDown />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => handleSelect("1d")}>
-                        1D
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleSelect("1w")}>
-                        1W
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleSelect("1m")}>
-                        1M
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleSelect("1y")}>
-                        1Y
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+        <div className="flex px-1 py-1 rounded-xl border-[1px] border-color-white gap-2">
+            {times.map((time) => (
+                <Button
+                    key={time}
+                    variant="ghost"
+                    className={
+                        selectedTime === time
+                            ? "bg-[#cca404] hover:bg-[#cca404]"
+                            : ""
+                    }
+                    onClick={() => handleSelect(time as any)}
+                >
+                    <div className="text-md font-semibold">
+                        {time.toUpperCase()}
+                    </div>
+                </Button>
+            ))}
         </div>
     );
 };
