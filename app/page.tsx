@@ -18,6 +18,7 @@ const Home = async ({ searchParams }: HomeProps) => {
                 <TimeRange />
             </div>
             <div className="font-bold "></div>
+            <LinePlot data={stockData.data} />
         </div>
     );
 };
