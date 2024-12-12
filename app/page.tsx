@@ -1,3 +1,4 @@
+import LinePlot from "@/components/LinePlot";
 import TimeRange from "@/components/TimeRange";
 import { fetchStockData } from "@/utils/api";
 
@@ -11,14 +12,12 @@ const Home = async ({ searchParams }: HomeProps) => {
     const params = await searchParams;
     const timerange = params.timerange || "1d";
     const stockData = await fetchStockData(timerange);
+    // console.log(stockData);
 
     return (
         <div className="flex flex-col items-center justify-center py-16 ">
-            <div className="">
-                <TimeRange />
-            </div>
-            <div className="font-bold "></div>
-            <LinePlot data={stockData.data} />
+            <TimeRange />
+            <LinePlot data={stockData.data} timerange={timerange} />
         </div>
     );
 };
