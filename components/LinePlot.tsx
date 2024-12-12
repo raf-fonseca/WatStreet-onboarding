@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import * as d3 from "d3";
 import { StockData } from "@/app/types";
 
@@ -11,14 +11,17 @@ interface LinePlotProps {
 
 const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
     const ref = useRef<SVGSVGElement | null>(null);
+    const [viewportStart, setViewportStart] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState(0);
 
     useEffect(() => {
         // Clear any existing SVG elements before rendering
         d3.select(ref.current).selectAll("*").remove();
 
         const parsedData = data.map((d, i) => ({
-            date: i, // Use index instead of date for linear scale
-            timestamp: new Date(d.timestamp), // Keep timestamp for tooltips/formatting
+            date: i,
+            timestamp: new Date(d.timestamp),
             price: d.price,
             volume: d.volume,
         }));
@@ -26,6 +29,13 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
         const margin = { top: 70, right: 80, bottom: 60, left: 50 };
         const width = 1200 - margin.left - margin.right;
         const height = 500 - margin.top - margin.bottom;
+
+        // Calculate visible data range (show quarter of the data for more zoom)
+        const visibleDataCount = Math.floor(parsedData.length / 4);
+        const visibleData = parsedData.slice(
+            viewportStart,
+            viewportStart + visibleDataCount
+        );
 
         const svg = d3
             .select(ref.current)
@@ -36,23 +46,22 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
             .style("fill", "#ffffff");
 
         // Use scaleLinear for x-axis with consistent padding
-        const xPadding = parsedData.length * 0.05; // 5% padding on each side
+        const xPadding = visibleDataCount * 0.05;
         const x = d3
             .scaleLinear()
-            .domain([-xPadding, parsedData.length - 1 + xPadding])
+            .domain([-xPadding, visibleDataCount - 1 + xPadding])
             .range([0, width])
             .nice();
 
-        const yMin = d3.min(parsedData, (d) => d.price) || 0;
-        const yMax = d3.max(parsedData, (d) => d.price) || 0;
-        const yPadding = (yMax - yMin) * 0.05; // 5% padding on top and bottom
+        const yMin = d3.min(visibleData, (d) => d.price) || 0;
+        const yMax = d3.max(visibleData, (d) => d.price) || 0;
+        const yPadding = (yMax - yMin) * 0.1; // Increased y-padding for better visibility
         const y = d3
             .scaleLinear()
             .domain([yMin - yPadding, yMax + yPadding])
             .range([height, 0])
             .nice();
 
-        // Determine number of ticks based on timerange
         let numTicks: number;
         let tickFormat: string;
         switch (timerange) {
@@ -74,14 +83,14 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
                 break;
         }
 
-        // Create x-axis with linear scale
         const xAxis = d3
             .axisBottom(x)
             .ticks(numTicks - 1)
             .tickFormat((i) => {
                 const index = Math.round(i as number);
-                return index >= 0 && index < parsedData.length
-                    ? d3.timeFormat(tickFormat)(parsedData[index].timestamp)
+                const dataIndex = index + viewportStart;
+                return dataIndex >= 0 && dataIndex < parsedData.length
+                    ? d3.timeFormat(tickFormat)(parsedData[dataIndex].timestamp)
                     : "";
             });
 
@@ -91,7 +100,7 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
             .selectAll("text")
             .style("fill", "#ffffff");
 
-        const yAxis = d3.axisRight(y).ticks(6).tickFormat(d3.format(".2f"));
+        const yAxis = d3.axisRight(y).ticks(8).tickFormat(d3.format(".2f")); // Increased number of y-axis ticks
         svg.append("g")
             .attr("transform", `translate(${width}, 0)`)
             .call(yAxis)
@@ -100,24 +109,23 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
 
         const line = d3
             .line<{ date: number; price: number }>()
-            .x((d) => x(d.date))
+            .x((d) => x(d.date - viewportStart))
             .y((d) => y(d.price))
             .curve(d3.curveMonotoneX);
 
-        // Split data into segments based on price changes
+        // Split visible data into segments
         const segments = [];
-        let currentSegment = [parsedData[0]];
+        let currentSegment = [visibleData[0]];
 
-        for (let i = 1; i < parsedData.length; i++) {
-            const prev = parsedData[i - 1];
-            const curr = parsedData[i];
+        for (let i = 1; i < visibleData.length; i++) {
+            const prev = visibleData[i - 1];
+            const curr = visibleData[i];
             currentSegment.push(curr);
 
-            // Start new segment when price direction changes or at end
             if (
-                i === parsedData.length - 1 ||
+                i === visibleData.length - 1 ||
                 curr.price > prev.price !==
-                    parsedData[i + 1]?.price > curr.price
+                    visibleData[i + 1]?.price > curr.price
             ) {
                 segments.push({
                     data: currentSegment,
@@ -127,31 +135,30 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
             }
         }
 
-        // Draw line segments with different colors
         segments.forEach((segment) => {
             svg.append("path")
                 .datum(segment.data)
                 .attr("fill", "none")
                 .attr("stroke", segment.increasing ? "#22c55e" : "#ef4444")
-                .attr("stroke-width", 2)
+                .attr("stroke-width", 2.5) // Increased line width
                 .attr("d", line);
         });
 
         svg.selectAll("circle")
-            .data(parsedData)
+            .data(visibleData)
             .enter()
             .append("circle")
-            .attr("cx", (d) => x(d.date))
+            .attr("cx", (d) => x(d.date - viewportStart))
             .attr("cy", (d) => y(d.price))
-            .attr("r", 2)
+            .attr("r", 3) // Increased default circle size
             .attr("fill", (d, i) => {
                 if (i === 0) return "#22c55e";
-                return parsedData[i].price > parsedData[i - 1].price
-                    ? "#22c55e" // green
-                    : "#ef4444"; // red
+                return visibleData[i].price > visibleData[i - 1].price
+                    ? "#22c55e"
+                    : "#ef4444";
             })
             .on("mouseover", function (event, d) {
-                d3.select(this).attr("r", 3).attr("fill", "#3b82f6");
+                d3.select(this).attr("r", 5).attr("fill", "#3b82f6"); // Increased hover circle size
             })
             .on(
                 "mouseout",
@@ -165,18 +172,18 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
                         volume: number;
                     }
                 ) {
-                    const idx = parsedData.indexOf(d);
+                    const idx = visibleData.indexOf(d);
                     const color =
                         idx === 0
                             ? "#22c55e"
-                            : parsedData[idx].price > parsedData[idx - 1].price
+                            : visibleData[idx].price >
+                              visibleData[idx - 1].price
                             ? "#22c55e"
                             : "#ef4444";
                     d3.select(this).attr("r", 3).attr("fill", color);
                 }
             );
 
-        // Add chart title
         svg.append("text")
             .attr("y", 0)
             .style("font-size", "20px")
@@ -191,27 +198,47 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
             .style("font-size", "12px")
             .attr("fill", "#ffffff");
 
+        // Add drag behavior
+        const dragRect = svg
+            .append("rect")
+            .attr("width", width)
+            .attr("height", height)
+            .attr("fill", "transparent")
+            .style("cursor", "grab");
+
+        dragRect
+            .on("mousedown", (event) => {
+                setIsDragging(true);
+                setDragStart(event.clientX);
+            })
+            .on("mousemove", (event) => {
+                if (isDragging) {
+                    const dx = event.clientX - dragStart;
+                    const dataShift = Math.floor(
+                        dx / (width / visibleDataCount)
+                    );
+                    const newStart = Math.max(
+                        0,
+                        Math.min(
+                            parsedData.length - visibleDataCount,
+                            viewportStart - dataShift
+                        )
+                    );
+                    setViewportStart(newStart);
+                    setDragStart(event.clientX);
+                }
+            })
+            .on("mouseup", () => {
+                setIsDragging(false);
+            })
+            .on("mouseleave", () => {
+                setIsDragging(false);
+            });
+
         return () => {
-            // Clean up the SVG before re-rendering
             d3.select(ref.current).selectAll("*").remove();
         };
-    }, [data, timerange]);
-
-    // Helper function to determine tick format based on range
-    const getTickFormat = (timerange: "1d" | "1w" | "1m" | "1y"): string => {
-        switch (timerange) {
-            case "1d":
-                return "%H:%M"; // Hour:Minute
-            case "1w":
-                return "%d %b %H:%M"; // Day Month Hour:Minute
-            case "1m":
-                return "%d %b"; // Day Month
-            case "1y":
-                return "%b %Y"; // Month Year
-            default:
-                return "%b %Y";
-        }
-    };
+    }, [data, timerange, viewportStart, isDragging, dragStart]);
 
     return (
         <div>
