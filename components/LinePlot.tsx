@@ -2,21 +2,21 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import * as d3 from "d3";
-import { StockData } from "@/app/types";
+import { HoverData, StockData } from "@/app/types";
 
 interface LinePlotProps {
     data: StockData[];
     timerange: "1d" | "1w" | "1m" | "1y";
+    onHover: (data: HoverData | null) => void;
 }
 
-const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
+const LinePlot: React.FC<LinePlotProps> = ({ data, timerange, onHover }) => {
     const ref = useRef<SVGSVGElement | null>(null);
     const [viewportStart, setViewportStart] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState(0);
 
     useEffect(() => {
-        // Clear any existing SVG elements before rendering
         d3.select(ref.current).selectAll("*").remove();
 
         const parsedData = data.map((d, i) => ({
@@ -30,7 +30,6 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
         const width = 1200 - margin.left - margin.right;
         const height = 500 - margin.top - margin.bottom;
 
-        // Calculate visible data range (show quarter of the data for more zoom)
         const visibleDataCount = Math.floor(parsedData.length / 4);
         const visibleData = parsedData.slice(
             viewportStart,
@@ -42,20 +41,30 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
             .attr("width", width + margin.left + margin.right)
             .attr("height", height + margin.top + margin.bottom)
             .append("g")
-            .attr("transform", `translate(${margin.left},${margin.top})`)
-            .style("fill", "#ffffff");
+            .attr("transform", `translate(${margin.left},${margin.top})`);
 
-        // Use scaleLinear for x-axis with consistent padding
+        // Add drag rect first
+        const dragRect = svg
+            .append("rect")
+            .attr("width", width)
+            .attr("height", height)
+            .attr("fill", "transparent")
+            .style("cursor", "grab");
+
+        const chartGroup = svg.append("g").attr("class", "chart-content");
+
+        const isAtEnd = viewportStart + visibleDataCount >= parsedData.length;
+        const rightPadding = isAtEnd ? visibleDataCount * 0.15 : 0; // Only add padding at the end
+
         const xPadding = visibleDataCount * 0.05;
         const x = d3
             .scaleLinear()
-            .domain([-xPadding, visibleDataCount - 1 + xPadding])
-            .range([0, width])
-            .nice();
+            .domain([-xPadding, visibleDataCount - 1 + rightPadding])
+            .range([0, width]);
 
         const yMin = d3.min(visibleData, (d) => d.price) || 0;
         const yMax = d3.max(visibleData, (d) => d.price) || 0;
-        const yPadding = (yMax - yMin) * 0.1; // Increased y-padding for better visibility
+        const yPadding = (yMax - yMin) * 0.1;
         const y = d3
             .scaleLinear()
             .domain([yMin - yPadding, yMax + yPadding])
@@ -98,14 +107,14 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
             .attr("transform", `translate(0, ${height})`)
             .call(xAxis)
             .selectAll("text")
-            .style("fill", "#ffffff");
+            .style("fill", "#a3a3a3");
 
-        const yAxis = d3.axisRight(y).ticks(8).tickFormat(d3.format(".2f")); // Increased number of y-axis ticks
+        const yAxis = d3.axisRight(y).ticks(8).tickFormat(d3.format(".2f"));
         svg.append("g")
             .attr("transform", `translate(${width}, 0)`)
             .call(yAxis)
             .selectAll("text")
-            .style("fill", "#ffffff");
+            .style("fill", "#a3a3a3");
 
         const line = d3
             .line<{ date: number; price: number }>()
@@ -113,7 +122,6 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
             .y((d) => y(d.price))
             .curve(d3.curveMonotoneX);
 
-        // Split visible data into segments
         const segments = [];
         let currentSegment = [visibleData[0]];
 
@@ -121,7 +129,6 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
             const prev = visibleData[i - 1];
             const curr = visibleData[i];
             currentSegment.push(curr);
-
             if (
                 i === visibleData.length - 1 ||
                 curr.price > prev.price !==
@@ -135,22 +142,42 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
             }
         }
 
+        if (isAtEnd) {
+            chartGroup
+                .append("rect")
+                .attr("x", x(visibleDataCount - 1))
+                .attr("y", 0)
+                .attr(
+                    "width",
+                    x(visibleDataCount - 1 + rightPadding) -
+                        x(visibleDataCount - 1)
+                )
+                .attr("height", height)
+                .attr("fill", "#09090b")
+                .attr("pointer-events", "none");
+        }
+
         segments.forEach((segment) => {
-            svg.append("path")
+            chartGroup
+                .append("path")
                 .datum(segment.data)
                 .attr("fill", "none")
                 .attr("stroke", segment.increasing ? "#22c55e" : "#ef4444")
-                .attr("stroke-width", 2.5) // Increased line width
+                .attr("stroke-width", 2.5)
                 .attr("d", line);
         });
 
-        svg.selectAll("circle")
+        // Add visible circles
+        chartGroup
+            .selectAll(".data-point")
             .data(visibleData)
             .enter()
             .append("circle")
+            .attr("class", "data-point")
+            .attr("data-index", (d, i) => i)
             .attr("cx", (d) => x(d.date - viewportStart))
             .attr("cy", (d) => y(d.price))
-            .attr("r", 3) // Increased default circle size
+            .attr("r", 3)
             .attr("fill", (d, i) => {
                 if (i === 0) return "#22c55e";
                 return visibleData[i].price > visibleData[i - 1].price
@@ -158,20 +185,17 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
                     : "#ef4444";
             })
             .on("mouseover", function (event, d) {
-                d3.select(this).attr("r", 5).attr("fill", "#3b82f6"); // Increased hover circle size
+                if (!isDragging) {
+                    d3.select(this).attr("r", 5).attr("fill", "#3b82f6");
+                    onHover({
+                        price: d.price,
+                        timestamp: d.timestamp,
+                        volume: d.volume,
+                    });
+                }
             })
-            .on(
-                "mouseout",
-                function (
-                    this: SVGCircleElement,
-                    event: any,
-                    d: {
-                        date: number;
-                        timestamp: Date;
-                        price: number;
-                        volume: number;
-                    }
-                ) {
+            .on("mouseout", function (event, d) {
+                if (!isDragging) {
                     const idx = visibleData.indexOf(d);
                     const color =
                         idx === 0
@@ -181,14 +205,16 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
                             ? "#22c55e"
                             : "#ef4444";
                     d3.select(this).attr("r", 3).attr("fill", color);
+                    onHover(null);
                 }
-            );
+            });
 
         svg.append("text")
             .attr("y", 0)
             .style("font-size", "20px")
             .style("font-weight", "bold")
-            .text("AAPL");
+            .text("AAPL")
+            .style("fill", "#ffffff");
 
         svg.append("text")
             .attr("transform", "rotate(-90)")
@@ -198,47 +224,42 @@ const LinePlot: React.FC<LinePlotProps> = ({ data, timerange }) => {
             .style("font-size", "12px")
             .attr("fill", "#ffffff");
 
-        // Add drag behavior
-        const dragRect = svg
-            .append("rect")
-            .attr("width", width)
-            .attr("height", height)
-            .attr("fill", "transparent")
-            .style("cursor", "grab");
+        const handleDragStart = (event: any) => {
+            setIsDragging(true);
+            setDragStart(event.clientX);
+            onHover(null);
+        };
+
+        const handleDragMove = (event: any) => {
+            if (isDragging) {
+                const dx = event.clientX - dragStart;
+                const dataShift = Math.floor(dx / (width / visibleDataCount));
+                const newStart = Math.max(
+                    0,
+                    Math.min(
+                        parsedData.length - visibleDataCount,
+                        viewportStart - dataShift
+                    )
+                );
+                setViewportStart(newStart);
+                setDragStart(event.clientX);
+            }
+        };
+
+        const handleDragEnd = () => {
+            setIsDragging(false);
+        };
 
         dragRect
-            .on("mousedown", (event) => {
-                setIsDragging(true);
-                setDragStart(event.clientX);
-            })
-            .on("mousemove", (event) => {
-                if (isDragging) {
-                    const dx = event.clientX - dragStart;
-                    const dataShift = Math.floor(
-                        dx / (width / visibleDataCount)
-                    );
-                    const newStart = Math.max(
-                        0,
-                        Math.min(
-                            parsedData.length - visibleDataCount,
-                            viewportStart - dataShift
-                        )
-                    );
-                    setViewportStart(newStart);
-                    setDragStart(event.clientX);
-                }
-            })
-            .on("mouseup", () => {
-                setIsDragging(false);
-            })
-            .on("mouseleave", () => {
-                setIsDragging(false);
-            });
+            .on("mousedown", handleDragStart)
+            .on("mousemove", handleDragMove)
+            .on("mouseup", handleDragEnd)
+            .on("mouseleave", handleDragEnd);
 
         return () => {
             d3.select(ref.current).selectAll("*").remove();
         };
-    }, [data, timerange, viewportStart, isDragging, dragStart]);
+    }, [data, timerange, viewportStart, isDragging, dragStart, onHover]);
 
     return (
         <div>
